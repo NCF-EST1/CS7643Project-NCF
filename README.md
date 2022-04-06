@@ -1,7 +1,7 @@
 # CS7643Project-NCF
 
 Usage:
-python main.py -d [moveilens/lastfm] -m [NCF/GMF/NCF_GMF] -C [config.yaml]
+python main.py -d [moveilens/lastfm] -m [NCF/GMF/NCF_GMF] -c [config.yaml]
 
 - main.py
 
