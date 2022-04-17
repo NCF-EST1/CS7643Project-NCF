@@ -125,6 +125,8 @@ def main():
     parser.add_argument('-m', help='models', dest='models')
     parser.add_argument('-c', help='config files', dest='configs')
     parser.add_argument('-s', help='dataset threshold', dest='dthreshold')
+    parser.add_argument('-l', help='loss function', dest='loss_fn')
+    parser.add_argument('-o', help='optimizer', dest='opt')
     args = parser.parse_args()
     if args.configs:
         with open(args.configs) as f:
@@ -138,6 +140,8 @@ def main():
             dataset = Dataset("./data/ml-1m")
         else:
             dataset = Dataset("./data/pinterest-20")
+    else:
+        dataset = Dataset("./data/pinterest-20")
     train, testRatings, testNegatives = dataset.trainMatrix, dataset.testRatings, dataset.testNegatives
 
     # apply dthreshold to use a subset of entire dataset
@@ -159,10 +163,32 @@ def main():
             model = GMF(num_users, num_items, args.gmf_emb_size)
         if args.models == 'NeuMF':
             model = NeuMF(num_users, num_items, args.mlp_emb_size, args.gmf_emb_size, args.layers)
+    else:
+        model = NCF(num_users, num_items, args.mlp_emb_size, args.layers)
     model = model.to(device)
     print(model)
-    criterion = nn.BCELoss()
-    optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.l2_reg)
+
+    # define the loss function
+    if args.loss_fn:
+        if args.loss_fn == 'BCE':
+            criterion = nn.BCELoss()
+        if args.loss_fn == 'BCEWithLogitsLoss':
+            criterion = nn.BCEWithLogitsLoss()
+        if args.loss_fn == 'KLDiv':
+            criterion = nn.KLDivLoss()
+    else:
+        criterion = nn.BCELoss()
+
+    # define the optimizer
+    if args.opt:
+        if args.opt == 'Adam':
+            optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.l2_reg)
+        if args.opt == 'SGD':
+            optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate, weight_decay=args.l2_reg)
+        if args.opt == 'RMSprop':
+            optimizer = torch.optim.RMSprop(model.parameters(), lr=args.learning_rate, weight_decay=args.l2_reg)
+    else:
+        optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.l2_reg)
 
     # run through epochs, track loss/hr/ndcg history and best value
     loss_history, hr_history, ndcg_history = [], [], []
