@@ -15,8 +15,11 @@ class NCF(nn.Module):
         self.item_emb = nn.Embedding(self.num_items, self.emb_size)
 
         self.linear = nn.ModuleList()
+        self.linear.append(nn.Linear(self.emb_size*2, layers[0]))
+        self.linear.append(nn.ReLU())
         for i in range(1, len(layers)):
             self.linear.append(nn.Linear(layers[i-1], layers[i]))
+            self.linear.append(nn.ReLU())
         
         self.final = nn.Sequential(
             nn.Linear(layers[-1], 1),
