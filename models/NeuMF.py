@@ -18,6 +18,8 @@ class NeuMF(nn.Module):
         self.gmf_item_emb = nn.Embedding(self.num_items, self.gmf_emb_size)
 
         self.mlp_linear = nn.ModuleList()
+        self.mlp_linear.append(nn.Linear(self.mlp_emb_size*2, layers[0]))
+        self.mlp_linear.append(nn.ReLU())
         for i in range(1, len(layers)):
             self.mlp_linear.append(nn.Linear(layers[i-1], layers[i]))
             self.mlp_linear.append(nn.ReLU())
