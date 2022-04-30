@@ -10,12 +10,13 @@ import json
 
 from torch import nn, optim
 import evaluation
-from loss import pointwise_loss, bpr_loss, hinge_loss, adaptive_hinge_loss
-
+from loss_functions import pointwise_loss, bpr_loss, hinge_loss, adaptive_hinge_loss
+import numpy as np
 
 def default_loss_fn(pos_pred, neg_pred):
     #print(-(pos_pred - neg_pred).sigmoid().log().sum())
     return - (pos_pred - neg_pred).sigmoid().log().sum()
+    #return np.sum(np.maximum(-(pos_pred - neg_pred), 0))
 
 
 def train(model, opt, data_splitter, validation_data, batch_size, config, loss_fn):
@@ -39,7 +40,7 @@ def train(model, opt, data_splitter, validation_data, batch_size, config, loss_f
             pos_pred = model(users, pos_items)
             #print('negative', len(users), len(neg_items))
             neg_pred = model(users, neg_items)
-            loss = loss_fn(pos_pred, neg_pred)
+            loss = -loss_fn(pos_pred, neg_pred)
             loss.backward()
             opt.step()
             total_loss += loss.item()

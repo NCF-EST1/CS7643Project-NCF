@@ -15,6 +15,8 @@ from models.NeuMF import NeuMF
 import matplotlib.pyplot as plt
 import pickle
 
+from loss_functions import pointwise_loss, bpr_loss
+
 
 def training(epoch, train_loader, model, optimizer, criterion, device):
     '''
@@ -34,9 +36,48 @@ def training(epoch, train_loader, model, optimizer, criterion, device):
         loss.backward()
         optimizer.step()
         losses.append(loss.item())
-    
+
         if idx % 100 == 0:
             print(('Training Epoch: {0} {1}/{2} Loss: {3} AvgLoss: {4}').format(epoch, idx, len(train_loader), loss, mean(losses)))
+    return mean(losses)
+
+def bpr_loss_fn(pos_pred, neg_pred):
+    return - (pos_pred - neg_pred).sigmoid().log().sum()
+
+def training_split(epoch, p_train_loader, n_train_loader, model, optimizer, criterion, device):
+    '''
+    Multi-batch training, return the average loss value.
+    '''
+    model.train()
+    losses = []
+    p_samples = []
+    n_samples = []
+    for idx, (user, item, target) in enumerate(p_train_loader):
+        p_samples.append((user, item, target))
+    for idx, (user, item, target) in enumerate(n_train_loader):
+        n_samples.append((user, item, target))
+
+    for idx, (user, item, target) in enumerate(p_samples):
+        user = user.to(device)
+        item = item.to(device)
+        target = target.to(device)
+        out  = model(user, item)
+        labels = torch.ones(len(user)).to(device)
+
+        n_user, n_item, n_target = n_samples[idx]
+        n_user = n_user.to(device)
+        n_item = n_item.to(device)
+        n_target = n_target.to(device)
+        n_out = model(n_user, n_item)
+        res = bpr_loss_fn(out, n_out)
+        loss = res
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+        losses.append(loss.item())
+
+        if idx % 100 == 0:
+            print(('Training Epoch: {0} {1}/{2} Loss: {3} AvgLoss: {4}').format(epoch, idx, len(p_train_loader), loss, mean(losses)))
     return mean(losses)
 
 def validate_single(i, ratings, negatives, model, device):
@@ -58,7 +99,7 @@ def validate_single(i, ratings, negatives, model, device):
         user_in = user_in.to(device)
         items = items.to(device)
         out = model(user_in, items)
-    
+
     # get prediction score for each items, find the 10 highest
     preds = out.view(-1).tolist()
     highest_pred = sorted(preds, reverse=True)
@@ -89,13 +130,13 @@ def validate(epoch, test_ratings, test_negatives, model, device, num_users):
 
             if i % 100 == 0:
                 print(('Validation Epoch: {0} {1}/{2} AvgHitRate: {3} AvgNDCG: {4}').format(epoch, i, len(test_ratings), mean(hrs), mean(ndcgs)))
-        
+
     return mean(hrs), mean(ndcgs)
 
 
 def get_train_instances(train, num_negatives, num_users):
     '''
-    Returns vector of user, item and label with all positive examples in "train" and num_negatives negative examples 
+    Returns vector of user, item and label with all positive examples in "train" and num_negatives negative examples
     (i.e. no interaction between user and item) derived from all items.
     Overall instances is limited by dthreshold number of users.
     '''
@@ -117,6 +158,37 @@ def get_train_instances(train, num_negatives, num_users):
             item_input.append(j)
             labels.append(0)
     return user_input, item_input, labels
+
+def get_train_instances_split(train, num_negatives, num_users):
+    '''
+    Returns vector of user, item and label with all positive examples in "train" and num_negatives negative examples
+    (i.e. no interaction between user and item) derived from all items.
+    Overall instances is limited by dthreshold number of users.
+    '''
+    p_user_input, p_item_input, p_labels = [], [], []
+    n_user_input, n_item_input, n_labels = [], [], []
+    _, num_items = train.shape
+    #print('train ', train.keys())
+    for (u, i) in train.keys():
+        if u >= num_users:
+            break
+
+        for t in range(num_negatives):
+            # positive instance
+            p_user_input.append(u)
+            p_item_input.append(i)
+            p_labels.append(1)
+
+        # negative instances: random sampling from items until finding one that user u do not have interaction with
+        for t in range(num_negatives):
+            j = np.random.randint(num_items)
+            while (u, j) in train.keys():
+                j = np.random.randint(num_items)
+            n_user_input.append(u)
+            n_item_input.append(j)
+            n_labels.append(0)
+    print('size of input', len(p_user_input), len(n_user_input))
+    return p_user_input, p_item_input, p_labels, n_user_input, n_item_input, n_labels
 
 def main():
     # parse command line arguments and arguments from config file
@@ -193,24 +265,19 @@ def main():
         loss_fn = 'BCE'
 
     # define the optimizer
-    print('defining optimizer' , args.opt)
     if args.opt:
-        print('inside here', args.opt == 'RMSprop')
         if args.opt == 'Adam':
             optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.l2_reg)
         if args.opt == 'SGD':
             optimizer = torch.optim.SGD(model.parameters(), lr=args.learning_rate, weight_decay=args.l2_reg)
         if args.opt == 'RMSprop':
-            print('rms prop running')
             optimizer = torch.optim.RMSprop(model.parameters(), lr=args.learning_rate, weight_decay=args.l2_reg)
         if args.opt == 'AdaGrad':
             optimizer = torch.optim.Adagrad(model.parameters(), lr=args.learning_rate, weight_decay=args.l2_reg)
         optimizer_name = args.opt
     else:
-        print('else case')
         optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.l2_reg)
         optimizer_name = 'Adam'
-    print('optimizer', optimizer_name)
 
     # run through epochs, track loss/hr/ndcg history and best value
     loss_history, hr_history, ndcg_history = [], [], []
@@ -218,10 +285,12 @@ def main():
     best_hr, best_ndcg, best_epoch = 0.0, 0.0, 0
     for epoch in range(args.epochs):
         # training
-        user_input, item_input, labels = get_train_instances(train, args.num_negatives, num_users)
-        ds = MyDataset(user_tensor=torch.LongTensor(user_input), item_tensor=torch.LongTensor(item_input), label_tensor=torch.LongTensor(labels))
-        train_loader = DataLoader(ds, batch_size=args.batch_size, shuffle=True)
-        loss = training(epoch, train_loader, model, optimizer, criterion, device)
+        p_user_input, p_item_input, p_labels, n_user_input, n_item_input, n_labels = get_train_instances_split(train, args.num_negatives, num_users)
+        p_ds = MyDataset(user_tensor=torch.LongTensor(p_user_input), item_tensor=torch.LongTensor(p_item_input), label_tensor=torch.LongTensor(p_labels))
+        n_ds = MyDataset(user_tensor=torch.LongTensor(n_user_input), item_tensor=torch.LongTensor(n_item_input), label_tensor=torch.LongTensor(n_labels))
+        p_train_loader = DataLoader(p_ds, batch_size=args.batch_size, shuffle=False)
+        n_train_loader = DataLoader(n_ds, batch_size=args.batch_size, shuffle=False)
+        loss = training_split(epoch, p_train_loader, n_train_loader, model, optimizer, criterion, device)
 
         # validation
         hr, ndcg = validate(epoch, testRatings, testNegatives, model, device, num_users)
@@ -268,8 +337,5 @@ def main():
     plt.savefig('./saved_models/' + str(model.name) + '_NDCG.png')
     plt.clf()
 
-
 if __name__ == '__main__':
     main()
-
-
