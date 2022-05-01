@@ -34,11 +34,11 @@ def translate_args(args):
     # load dataset and extract train & testing instances
     if args.dataset:
         if args.dataset == "movielens":
-            dataset = Dataset("../data/ml-1m")
+            dataset = Dataset("./data/ml-1m")
         else:
-            dataset = Dataset("../data/pinterest-20")
+            dataset = Dataset("./data/pinterest-20")
     else:
-        dataset = Dataset("../data/pinterest-20")
+        dataset = Dataset("./data/pinterest-20")
     train, testRatings, testNegatives = dataset.trainMatrix, dataset.testRatings, dataset.testNegatives
 
     # apply dthreshold to use a subset of entire dataset
@@ -68,15 +68,6 @@ def translate_args(args):
         layers =  args.layers
     print(model)
 
-    # define the loss function
-    if args.loss_fn:
-        if args.loss_fn == 'Top1':
-            criterion = TOP1
-        if args.loss_fn == 'BPR':
-            criterion = BPR
-    else:
-        criterion = BPR
-
     # define the optimizer
     if args.opt:
         if args.opt == 'Adam':
@@ -90,7 +81,7 @@ def translate_args(args):
     else:
         optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.l2_reg)
 
-    return dataset, dthreshold, model, emb_size, layers, criterion, optimizer
+    return dataset, dthreshold, model, emb_size, layers, optimizer
 
 
 def validate(epoch, test_ratings, test_negatives, model, device, num_users):
@@ -187,4 +178,4 @@ def TOP1(item_i, item_j):
 
 def BPR(item_i, item_j):
     diff = item_i - item_j
-    return -torch.mean(torch.logsigmoid(diff))
+    return -torch.mean(nn.functional.logsigmoid(diff))

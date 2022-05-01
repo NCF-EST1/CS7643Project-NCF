@@ -193,9 +193,7 @@ def main():
         loss_fn = 'BCE'
 
     # define the optimizer
-    print('defining optimizer' , args.opt)
     if args.opt:
-        print('inside here', args.opt == 'RMSprop')
         if args.opt == 'Adam':
             optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.l2_reg)
         if args.opt == 'SGD':
@@ -207,10 +205,10 @@ def main():
             optimizer = torch.optim.Adagrad(model.parameters(), lr=args.learning_rate, weight_decay=args.l2_reg)
         optimizer_name = args.opt
     else:
-        print('else case')
         optimizer = torch.optim.Adam(model.parameters(), lr=args.learning_rate, weight_decay=args.l2_reg)
         optimizer_name = 'Adam'
-    print('optimizer', optimizer_name)
+
+    model_name = '{0}_loss_{1}_opt_{2}_lr_{3}_layers_{4}_emb_size_{5}_negatives_{6}_batch_size_{7}_epochs_{8}'.format(model.name, loss_fn, optimizer_name, args.learning_rate, layers, emb_size, args.num_negatives, args.batch_size, args.epochs)
 
     # run through epochs, track loss/hr/ndcg history and best value
     loss_history, hr_history, ndcg_history = [], [], []
@@ -242,7 +240,6 @@ def main():
 
     print("### Finish ### Best Epoch: {0} Best HitRate: {1} Best Ndcg: {2}".format(best_epoch, best_hr, best_ndcg))
 
-    model_name = '{0}_loss_{1}_opt_{2}_lr_{3}_layers_{4}_emb_size_{5}_negatives_{6}_batch_size_{7}_epochs_{8}'.format(model.name, loss_fn, optimizer_name, args.learning_rate, layers, emb_size, args.num_negatives, args.batch_size, args.epochs)
     # save loss, hr, ndcg as pickle, easy to load and compare against multiple models/configs
     save_dict = {}
     save_dict["loss"] = loss_history

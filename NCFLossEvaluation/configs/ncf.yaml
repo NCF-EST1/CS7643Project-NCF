@@ -1,6 +1,6 @@
 batch_size: 256
 learning_rate: 0.001
-epochs: 10
+epochs: 20
 mlp_emb_size: 64
 num_negatives: 4
 layers: [64,32,16,8]
