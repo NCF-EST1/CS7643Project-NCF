@@ -169,7 +169,7 @@ def get_train_instances(train, num_negatives, num_users):
 
     return p_user_input, p_item_input, p_labels, n_user_input, n_item_input, n_labels
 
-
+# The two loss functions are borrowed from here: https://github.com/cheon-research/J-NCF-pytorch/blob/master/functions.py
 def TOP1(item_i, item_j):
     diff = item_j - item_i
     loss = (torch.sigmoid(diff) + torch.sigmoid(torch.pow(item_j, 2)))

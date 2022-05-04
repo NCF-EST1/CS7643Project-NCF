@@ -95,6 +95,9 @@ def main():
             point_loss = positive_point_loss + negative_point_loss
 
             if pair_loss_function is not None:
+                # Hybrid loss function idea from:
+                # https://staff.fnwi.uva.nl/m.derijke/wp-content/papercite-data/pdf/chen-2019-joi
+                # https://github.com/cheon-research/J-NCF-pytorch/blob/master/main.py
                 pair_loss = alpha * pair_loss_function(p_out, n_out)
                 loss = pair_loss + point_loss
             else:
